@@ -1,0 +1,72 @@
+name: monthly-listening
+
+on:
+  schedule:
+    - cron: "0 2 1 * *"
+  workflow_dispatch:
+
+concurrency:
+  group: monthly-listening
+  cancel-in-progress: false
+
+jobs:
+  run-listening-task:
+    runs-on: ubuntu-latest
+    timeout-minutes: 720
+    env:
+      MUSICHELP_CONFIG_PATH: config/listening-task.yaml
+      QR_LINK_PUBLIC_BASE_URL: ${{ vars.QR_LINK_PUBLIC_BASE_URL }}
+      QR_LINK_SIGNING_SECRET: ${{ secrets.QR_LINK_SIGNING_SECRET }}
+      FEISHU_BOT_WEBHOOK: ${{ secrets.FEISHU_BOT_WEBHOOK }}
+      NETEASE_SESSION_SECRET: ${{ secrets.NETEASE_SESSION_SECRET }}
+      NETEASE_USERNAME: ${{ secrets.NETEASE_USERNAME }}
+      NETEASE_PASSWORD: ${{ secrets.NETEASE_PASSWORD }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Restore persisted session cache
+        id: session-cache-restore
+        uses: actions/cache/restore@v4
+        with:
+          path: |
+            artifacts/state/session-state.json
+            artifacts/state/session-metadata.json
+          key: monthly-listening-session-${{ github.ref_name }}
+
+      - name: Install Playwright Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Validate config
+        run: npm run check-config -- config/listening-task.yaml
+
+      - name: Run tests
+        run: npm test
+
+      - name: Run monthly task
+        run: npm run task:monthly
+
+      - name: Save persisted session cache
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: |
+            artifacts/state/session-state.json
+            artifacts/state/session-metadata.json
+          key: monthly-listening-session-${{ github.ref_name }}
+
+      - name: Upload artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: monthly-listening-artifacts
+          path: artifacts/
