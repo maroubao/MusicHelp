@@ -72,23 +72,107 @@ class PlaywrightBrowserAutomation implements BrowserAutomation {
   }
 
   async openTarget(target: TrackTarget): Promise<void> {
-    await this.page.goto(target.url, { waitUntil: "domcontentloaded" });
+    await this.page.goto(this.normalizeSongUrl(target.url), { waitUntil: "domcontentloaded" });
+    await this.page.waitForLoadState("networkidle").catch(() => undefined);
   }
 
-  async startPlayback(): Promise<void> {
+  async startPlayback(target: TrackTarget): Promise<void> {
+    const directPlaySelector = `a[data-res-action="play"][data-res-id="${this.extractSongId(target.url) ?? ""}"]`;
+
+    if ((await this.page.locator(directPlaySelector).count()) > 0) {
+      await this.page.locator(directPlaySelector).first().click();
+      return;
+    }
+
+    if ((await this.page.locator('a[data-res-action="play"]').count()) > 0) {
+      await this.page.locator('a[data-res-action="play"]').first().click();
+      return;
+    }
+
     await this.page.keyboard.press("Space");
   }
 
   async waitForTrackFinished(): Promise<PlaybackResult> {
     try {
-      await this.page.waitForTimeout(1_000);
+      await this.page.waitForFunction(() => {
+        const audio = document.querySelector<HTMLAudioElement>("audio");
+        if (audio && audio.duration > 0) {
+          return !audio.paused || audio.currentTime > 0;
+        }
+
+        const timeTexts = Array.from(document.querySelectorAll<HTMLElement>(".m-playbar .time em, .m-playbar em"))
+          .map((node) => node.innerText.trim())
+          .filter(Boolean);
+        return timeTexts.some((text) => /^\d{1,2}:\d{2}$/.test(text));
+      }, undefined, { timeout: 30_000 });
+
+      await this.page.waitForFunction(() => {
+        const parseTime = (input: string): number | null => {
+          const match = /^(\d{1,2}):(\d{2})$/.exec(input.trim());
+          if (!match) return null;
+          return Number(match[1]) * 60 + Number(match[2]);
+        };
+
+        const audio = document.querySelector<HTMLAudioElement>("audio");
+        if (audio && audio.duration > 0) {
+          const state = (window as typeof window & {
+            __musicHelpStartedAt?: number;
+            __musicHelpLastTime?: number;
+          });
+
+          if (!state.__musicHelpStartedAt && (!audio.paused || audio.currentTime > 0)) {
+            state.__musicHelpStartedAt = Date.now();
+            state.__musicHelpLastTime = audio.currentTime;
+          }
+
+          if (state.__musicHelpStartedAt && audio.currentTime > (state.__musicHelpLastTime ?? 0)) {
+            state.__musicHelpLastTime = audio.currentTime;
+          }
+
+          return audio.ended || (audio.duration - audio.currentTime <= 1 && audio.currentTime > 1);
+        }
+
+        const timeTexts = Array.from(document.querySelectorAll<HTMLElement>(".m-playbar .time em, .m-playbar em"))
+          .map((node) => node.innerText.trim())
+          .filter((text) => /^\d{1,2}:\d{2}$/.test(text));
+
+        if (timeTexts.length < 2) {
+          return false;
+        }
+
+        const current = parseTime(timeTexts[0] ?? "");
+        const total = parseTime(timeTexts[1] ?? "");
+        if (current === null || total === null || total <= 0) {
+          return false;
+        }
+
+        const state = (window as typeof window & {
+          __musicHelpStartedProgress?: boolean;
+          __musicHelpLastProgress?: number;
+        });
+
+        if (current > 0) {
+          state.__musicHelpStartedProgress = true;
+        }
+
+        if ((state.__musicHelpLastProgress ?? -1) < current) {
+          state.__musicHelpLastProgress = current;
+        }
+
+        return Boolean(state.__musicHelpStartedProgress) && total - current <= 1;
+      }, undefined, { timeout: 20 * 60_000, polling: 1000 });
+
       return { status: "finished" };
     } catch (error) {
       return {
         status: "error",
-        reason: error instanceof Error ? error.message : "playback_wait_failed",
+        reason: error instanceof Error ? `real_playback_detection_failed: ${error.message}` : "real_playback_detection_failed",
       };
     }
+  }
+
+  getCompletionDetectionMode(): "simulated_debug" | "real" {
+    return "real";
   }
 
   async captureScreenshot(filePath: string): Promise<void> {
@@ -102,6 +186,15 @@ class PlaywrightBrowserAutomation implements BrowserAutomation {
   async close(): Promise<void> {
     await this.context.close();
     await this.browser.close();
+  }
+
+  private normalizeSongUrl(url: string): string {
+    return url.replace("https://music.163.com/#/song?", "https://music.163.com/song?");
+  }
+
+  private extractSongId(url: string): string | undefined {
+    const normalized = this.normalizeSongUrl(url);
+    return new URL(normalized).searchParams.get("id") ?? undefined;
   }
 }
 

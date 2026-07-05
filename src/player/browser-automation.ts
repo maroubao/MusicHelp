@@ -10,6 +10,7 @@ export type BrowserAutomation = AuthAutomation & {
   openTarget(target: TrackTarget): Promise<void>;
   startPlayback(target: TrackTarget): Promise<void>;
   waitForTrackFinished(target: TrackTarget): Promise<PlaybackResult>;
+  getCompletionDetectionMode(): "simulated_debug" | "real";
   captureScreenshot(filePath: string): Promise<void>;
   captureDomSnapshot(filePath: string): Promise<void>;
   close(): Promise<void>;

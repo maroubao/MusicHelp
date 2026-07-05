@@ -61,6 +61,10 @@ class FakeBrowserAutomation implements BrowserAutomation {
     return { status: "error", reason: "simulated_playback_failure" } as const;
   }
 
+  getCompletionDetectionMode(): "simulated_debug" | "real" {
+    return "real";
+  }
+
   async captureScreenshot(filePath: string): Promise<void> {
     await import("node:fs/promises").then(({ writeFile }) => writeFile(filePath, "image", "utf8"));
   }

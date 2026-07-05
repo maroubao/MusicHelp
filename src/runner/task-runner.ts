@@ -178,7 +178,7 @@ export class TaskRunner {
           authMethod,
           targetMode: plan.mode,
           targetNames: plan.queue.map((track) => track.name),
-          completionDetection: "simulated_debug",
+          completionDetection: currentAutomation.getCompletionDetectionMode(),
         };
         await evidence.writeRunSummary(summary);
         if (options.config.notify.send_success) {
@@ -233,7 +233,7 @@ export class TaskRunner {
       authMethod,
       targetMode: plan.mode,
       targetNames: plan.queue.map((track) => track.name),
-      completionDetection: "simulated_debug",
+      completionDetection: automationCompletionDetectionFallback(options.browserFactory),
     };
     await logger.error(
       `Task failed after ${options.config.retry.max_attempts} attempt(s); final_progress=${counterState.effectiveCount}/${counterState.targetCount}; reason=${lastReason}.`,
@@ -241,4 +241,8 @@ export class TaskRunner {
     await evidence.writeRunSummary(summary);
     return summary;
   }
+}
+
+function automationCompletionDetectionFallback(_browserFactory: BrowserFactory): "simulated_debug" | "real" {
+  return "real";
 }

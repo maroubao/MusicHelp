@@ -48,6 +48,10 @@ class FakePlaybackAutomation implements BrowserAutomation {
     return { status: "error", reason: "track_interrupted" } as const;
   }
 
+  getCompletionDetectionMode(): "simulated_debug" | "real" {
+    return "real";
+  }
+
   async captureScreenshot(): Promise<void> {}
   async captureDomSnapshot(): Promise<void> {}
   async close(): Promise<void> {}
