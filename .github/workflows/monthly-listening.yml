@@ -24,9 +24,11 @@ jobs:
     timeout-minutes: 720
     env:
       MUSICHELP_CONFIG_PATH: ${{ inputs.config_path || 'config/listening-task.yaml' }}
+      FEISHU_BOT_WEBHOOK: ${{ secrets.FEISHU_BOT_WEBHOOK }}
+      FEISHU_APP_ID: ${{ secrets.FEISHU_APP_ID }}
+      FEISHU_APP_SECRET: ${{ secrets.FEISHU_APP_SECRET }}
       QR_LINK_PUBLIC_BASE_URL: ${{ vars.QR_LINK_PUBLIC_BASE_URL }}
       QR_LINK_SIGNING_SECRET: ${{ secrets.QR_LINK_SIGNING_SECRET }}
-      FEISHU_BOT_WEBHOOK: ${{ secrets.FEISHU_BOT_WEBHOOK }}
       NETEASE_SESSION_SECRET: ${{ secrets.NETEASE_SESSION_SECRET }}
       NETEASE_USERNAME: ${{ secrets.NETEASE_USERNAME }}
       NETEASE_PASSWORD: ${{ secrets.NETEASE_PASSWORD }}

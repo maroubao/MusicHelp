@@ -7,7 +7,7 @@ GitHub Actions based monthly listening task automation scaffold for NetEase Musi
 - TypeScript runtime scaffold for M1-M5
 - YAML config loading and schema validation
 - Session restore and persistence skeleton
-- QR login recovery flow with signed temporary link manifests
+- QR login recovery flow with direct Feishu image delivery and optional signed temporary link manifests
 - Password fallback branch retained behind secrets
 - Sequential target resolution for `song` / `songs` / `playlist`
 - Full-track-finished counting model
@@ -70,6 +70,7 @@ Set these in `Settings -> Secrets and variables -> Actions`.
 - `QR_LINK_PUBLIC_BASE_URL`
 
 Detailed setup guidance is in [docs/github-actions-setup.md](/abs/path/D:/Projects/MusicHelp/docs/github-actions-setup.md:1).
+Chinese setup guidance is in [docs/github-actions-setup.zh-CN.md](/abs/path/D:/Projects/MusicHelp/docs/github-actions-setup.zh-CN.md:1).
 
 ## Artifacts
 

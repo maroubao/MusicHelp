@@ -23,11 +23,47 @@ describe("FeishuNotifier", () => {
 
     await notifier.sendSuccess({ durationMs: 1000, effectiveCount: 2 });
     await notifier.sendFailure({ attempt: 2, reason: "selector_invalid" });
-    await notifier.sendQrLoginLink({ link: "https://example.test/qr/token", expiresInMinutes: 10, attempt: 1 });
+    await notifier.sendQrLogin({ link: "https://example.test/qr/token", expiresInMinutes: 10, attempt: 1 });
 
     expect(bodies).toHaveLength(3);
     expect(bodies[0]).toContain("effective_count=2");
     expect(bodies[1]).toContain("selector_invalid");
     expect(bodies[2]).toContain("https://example.test/qr/token");
+  });
+
+  it("uploads qr image and sends image message when app credentials are available", async () => {
+    const dir = await mkdtemp(path.join(tmpdir(), "musichelp-notifier-image-"));
+    const logger = new ArtifactLogger(path.join(dir, "run.log"));
+    await logger.init();
+
+    const requests: Array<{ input: string; body?: string; headers?: HeadersInit }> = [];
+    const notifier = new FeishuNotifier({
+      webhookUrl: "https://example.test/hook",
+      appId: "cli_xxx",
+      appSecret: "secret_xxx",
+      logger,
+      async fetchImpl(input, init) {
+        requests.push({ input: String(input), body: init.body as string | undefined, headers: init.headers });
+        if (String(input).includes("/tenant_access_token/internal")) {
+          return new Response(JSON.stringify({ tenant_access_token: "token-123" }), { status: 200 });
+        }
+        if (String(input).includes("/im/v1/images")) {
+          return new Response(JSON.stringify({ data: { image_key: "img_v3_key" } }), { status: 200 });
+        }
+        return new Response(null, { status: 200 });
+      },
+    });
+
+    await notifier.sendQrLogin({
+      attempt: 1,
+      expiresInMinutes: 10,
+      imageDataUrl: "data:image/png;base64,YWJj",
+    });
+
+    expect(requests).toHaveLength(4);
+    expect(requests[0]?.input).toContain("/tenant_access_token/internal");
+    expect(requests[1]?.input).toContain("/im/v1/images");
+    expect(requests[2]?.body).toContain("\"msg_type\":\"image\"");
+    expect(requests[3]?.body).toContain("\"msg_type\":\"text\"");
   });
 });

@@ -41,6 +41,8 @@ export class TaskRunner {
     const notifier = new FeishuNotifier({
       webhookUrl: resolveOptionalSecret(options.config.notify.feishu_webhook_secret_ref),
       logger,
+      appId: resolveOptionalSecret("FEISHU_APP_ID"),
+      appSecret: resolveOptionalSecret("FEISHU_APP_SECRET"),
     });
 
     const sessionManager = new SessionManager(paths.stateDir);
@@ -74,15 +76,20 @@ export class TaskRunner {
         if (!sessionResult.valid) {
           await runState.recordState("AUTHENTICATING", sessionResult.reason, attempt);
 
-          const qrSigningSecret = resolveSecret(options.qrSigningSecretEnvName ?? "QR_LINK_SIGNING_SECRET");
+          const qrPublicBaseUrl = options.qrPublicBaseUrl ?? process.env.QR_LINK_PUBLIC_BASE_URL;
+          const qrSigningSecret = qrPublicBaseUrl
+            ? resolveSecret(options.qrSigningSecretEnvName ?? "QR_LINK_SIGNING_SECRET")
+            : undefined;
           const authManager = new AuthManager(
             currentAutomation,
             notifier,
-            new QrLinkService({
-              qrDir: paths.qrDir,
-              baseUrl: options.qrPublicBaseUrl ?? process.env.QR_LINK_PUBLIC_BASE_URL,
-              signingSecret: qrSigningSecret,
-            }),
+            qrPublicBaseUrl && qrSigningSecret
+              ? new QrLinkService({
+                  qrDir: paths.qrDir,
+                  baseUrl: qrPublicBaseUrl,
+                  signingSecret: qrSigningSecret,
+                })
+              : undefined,
             async () => sessionManager.persistSession(() => currentAutomation.exportStorageState()),
             {
               qrWaitTimeoutMinutes: options.config.auth.qr_wait_timeout_minutes,

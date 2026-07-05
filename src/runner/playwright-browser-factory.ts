@@ -1,4 +1,5 @@
 import { writeFile } from "node:fs/promises";
+import { Buffer } from "node:buffer";
 import type { BrowserAutomation, PlaybackResult } from "../player/browser-automation.js";
 import type { TrackTarget } from "../runtime/types.js";
 import type { BrowserFactory } from "./task-runner.js";
@@ -30,7 +31,7 @@ class PlaywrightBrowserAutomation implements BrowserAutomation {
   }
 
   async fetchQrCode() {
-    const imageDataUrl = "data:image/png;base64,placeholder";
+    const imageDataUrl = `data:image/png;base64,${Buffer.from("placeholder-qr").toString("base64")}`;
     return {
       imageDataUrl,
       expiresInMinutes: 10,

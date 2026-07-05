@@ -63,6 +63,13 @@ export type GeneratedQrLink = {
   manifestPath: string;
 };
 
+export type QrLoginNotification = {
+  expiresInMinutes: number;
+  attempt: number;
+  imageDataUrl?: string;
+  link?: string;
+};
+
 export type RunSummary = {
   taskName: string;
   status: "success" | "failure";

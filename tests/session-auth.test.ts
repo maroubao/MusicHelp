@@ -100,8 +100,8 @@ describe("AuthManager", () => {
     const manager = new AuthManager(
       automation,
       {
-        async sendQrLoginLink(payload) {
-          notifications.push(payload.link);
+        async sendQrLogin(payload) {
+          notifications.push(payload.link ?? payload.imageDataUrl ?? "missing");
         },
       },
       new QrLinkService({
@@ -127,6 +127,7 @@ describe("AuthManager", () => {
 
     expect(result).toEqual({ success: true, method: "qr" });
     expect(notifications).toHaveLength(4);
+    expect(notifications[0]).toContain("https://example.test/qr/");
     expect(automation.qrRefreshes).toBe(2);
     expect(persisted).toBe(1);
   });

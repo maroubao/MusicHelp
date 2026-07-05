@@ -1,5 +1,5 @@
 import type { ArtifactLogger } from "../runtime/logger.js";
-import type { AuthResult, GeneratedQrLink, QrCodeArtifact } from "../runtime/types.js";
+import type { AuthResult, GeneratedQrLink, QrCodeArtifact, QrLoginNotification } from "../runtime/types.js";
 
 export type AuthAutomation = {
   isLoggedIn(): Promise<boolean>;
@@ -11,7 +11,7 @@ export type AuthAutomation = {
 };
 
 export type AuthNotifier = {
-  sendQrLoginLink(payload: { link: string; expiresInMinutes: number; attempt: number }): Promise<void>;
+  sendQrLogin(payload: QrLoginNotification): Promise<void>;
 };
 
 export type AuthLinkGenerator = {
@@ -32,7 +32,7 @@ export class AuthManager {
   constructor(
     private readonly automation: AuthAutomation,
     private readonly notifier: AuthNotifier,
-    private readonly linkGenerator: AuthLinkGenerator,
+    private readonly linkGenerator: AuthLinkGenerator | undefined,
     private readonly persistSession: () => Promise<void>,
     private readonly options: AuthManagerOptions,
   ) {}
@@ -65,11 +65,12 @@ export class AuthManager {
 
     for (let refreshIndex = 0; refreshIndex <= this.options.qrRefreshLimit; refreshIndex += 1) {
       const attempt = attemptBase + refreshIndex;
-      const link = await this.linkGenerator.createLink(artifact);
-      await this.notifier.sendQrLoginLink({
-        link: link.url,
+      const link = this.linkGenerator ? await this.linkGenerator.createLink(artifact) : undefined;
+      await this.notifier.sendQrLogin({
         expiresInMinutes: artifact.expiresInMinutes,
         attempt,
+        imageDataUrl: artifact.imageDataUrl,
+        link: link?.url,
       });
       await this.options.logger.info(`QR login link issued for attempt ${attempt}.`);
 
