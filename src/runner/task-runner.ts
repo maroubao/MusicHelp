@@ -60,6 +60,7 @@ export class TaskRunner {
       ].join("; "),
     );
     await logger.info(`Playback queue: ${plan.queue.map((track) => `${track.name} <${track.url}>`).join(" | ")}`);
+    const targetSummary = `${plan.mode} / ${plan.queue.map((track) => track.name).join(", ")}`;
 
     let lastReason = "unknown_failure";
     let authMethod: AuthMethod | undefined;
@@ -175,12 +176,18 @@ export class TaskRunner {
           targetCount: counterState.targetCount,
           attempt,
           authMethod,
+          targetMode: plan.mode,
+          targetNames: plan.queue.map((track) => track.name),
+          completionDetection: "simulated_debug",
         };
         await evidence.writeRunSummary(summary);
         if (options.config.notify.send_success) {
           await notifier.sendSuccess({
             durationMs: summary.durationMs,
             effectiveCount: summary.effectiveCount,
+            targetCount: summary.targetCount,
+            targetSummary,
+            completionDetection: summary.completionDetection ?? "simulated_debug",
           });
         }
         await automation.close();
@@ -190,8 +197,14 @@ export class TaskRunner {
         await runState.recordState("FAILED", lastReason, attempt);
         await logger.error(`Attempt ${attempt}: task failed; reason=${lastReason}.`);
         await evidence.captureFailureEvidence(automation, lastReason, attempt, "FAILED");
+        const counterState = await counterService.loadCounterState();
         if (options.config.notify.send_failure) {
-          await notifier.sendFailure({ attempt, reason: lastReason });
+          await notifier.sendFailure({
+            attempt,
+            reason: lastReason,
+            targetSummary,
+            progressText: `${counterState.effectiveCount}/${counterState.targetCount}`,
+          });
         }
         if (automation) {
           await automation.close();
@@ -218,6 +231,9 @@ export class TaskRunner {
       attempt: options.config.retry.max_attempts,
       failureReason: lastReason,
       authMethod,
+      targetMode: plan.mode,
+      targetNames: plan.queue.map((track) => track.name),
+      completionDetection: "simulated_debug",
     };
     await logger.error(
       `Task failed after ${options.config.retry.max_attempts} attempt(s); final_progress=${counterState.effectiveCount}/${counterState.targetCount}; reason=${lastReason}.`,

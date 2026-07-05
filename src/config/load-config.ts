@@ -13,11 +13,39 @@ function formatZodError(error: ZodError): string {
     .join("; ");
 }
 
+function applyEnvOverrides(config: AppConfig): AppConfig {
+  const targetEffectiveCount = process.env.MUSICHELP_TARGET_EFFECTIVE_COUNT;
+  const targetSongUrl = process.env.MUSICHELP_TARGET_SONG_URL;
+  const targetSongName = process.env.MUSICHELP_TARGET_SONG_NAME?.trim();
+
+  const nextConfig: AppConfig = {
+    ...config,
+    target_effective_count: targetEffectiveCount ? Number.parseInt(targetEffectiveCount, 10) : config.target_effective_count,
+  };
+
+  if (targetSongUrl) {
+    nextConfig.targets = {
+      mode: "song",
+      song: {
+        name: targetSongName || "workflow-song",
+        url: targetSongUrl,
+      },
+    };
+    nextConfig.playback = {
+      ...nextConfig.playback,
+      loop_mode: "single_repeat",
+    };
+  }
+
+  return nextConfig;
+}
+
 export async function loadConfig(configPath: string): Promise<AppConfig> {
   const resolvedPath = path.resolve(configPath);
   const source = await readFile(resolvedPath, "utf8");
   const parsed = parseYaml(source);
-  const result = appConfigSchema.safeParse(parsed);
+  const configWithOverrides = applyEnvOverrides(parsed as AppConfig);
+  const result = appConfigSchema.safeParse(configWithOverrides);
 
   if (!result.success) {
     throw new Error(formatZodError(result.error));

@@ -1,20 +1,18 @@
 task_name: monthly-listening
 schedule: "0 2 1 * *"
 runner_mode: github_actions
-target_effective_count: 365
+target_effective_count: 1
 max_run_hours: 12
 
 targets:
-  mode: songs
-  songs:
-    - name: song-a
-      url: "https://music.163.com/#/song?id=123456"
-    - name: song-b
-      url: "https://music.163.com/#/song?id=654321"
+  mode: song
+  song:
+    name: song-3361270426
+    url: "https://music.163.com/#/song?id=3361270426"
 
 playback:
   order: sequential
-  loop_mode: list_repeat
+  loop_mode: single_repeat
   completion_rule: full_track_finished
 
 retry:

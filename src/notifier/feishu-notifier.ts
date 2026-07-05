@@ -18,20 +18,40 @@ export class FeishuNotifier {
     this.fetchImpl = options.fetchImpl ?? fetch;
   }
 
-  async sendSuccess(payload: { durationMs: number; effectiveCount: number }): Promise<void> {
+  async sendSuccess(payload: {
+    durationMs: number;
+    effectiveCount: number;
+    targetCount: number;
+    targetSummary: string;
+    completionDetection: "simulated_debug" | "real";
+  }): Promise<void> {
     await this.send("success", {
       msg_type: "text",
       content: {
-        text: `monthly-listening success; duration_ms=${payload.durationMs}; effective_count=${payload.effectiveCount}`,
+        text: [
+          "听歌任务执行成功",
+          `目标: ${payload.targetSummary}`,
+          `完成进度: ${payload.effectiveCount}/${payload.targetCount}`,
+          `耗时(ms): ${payload.durationMs}`,
+          `完成判定: ${payload.completionDetection === "simulated_debug" ? "调试占位判定" : "真实播放判定"}`,
+        ].join("\n"),
       },
     });
   }
 
-  async sendFailure(payload: { attempt: number; reason: string }): Promise<void> {
+  async sendFailure(payload: { attempt: number; reason: string; targetSummary?: string; progressText?: string }): Promise<void> {
     await this.send("failure", {
       msg_type: "text",
       content: {
-        text: `monthly-listening failure; attempt=${payload.attempt}; reason=${payload.reason}`,
+        text: [
+          "听歌任务执行失败",
+          `失败轮次: 第 ${payload.attempt} 次`,
+          payload.targetSummary ? `目标: ${payload.targetSummary}` : undefined,
+          payload.progressText ? `进度: ${payload.progressText}` : undefined,
+          `原因: ${payload.reason}`,
+        ]
+          .filter(Boolean)
+          .join("\n"),
       },
     });
   }
@@ -39,18 +59,18 @@ export class FeishuNotifier {
   async sendQrLogin(payload: QrLoginNotification): Promise<void> {
     const imageSent = payload.imageDataUrl ? await this.trySendQrImage(payload.imageDataUrl) : false;
     const parts = [
-      "monthly-listening login required",
-      `attempt=${payload.attempt}`,
-      `expires_in_minutes=${payload.expiresInMinutes}`,
-      `image_delivery=${imageSent ? "sent" : "unavailable"}`,
+      "需要重新登录网易云音乐",
+      `当前轮次: 第 ${payload.attempt} 次`,
+      `二维码有效期: ${payload.expiresInMinutes} 分钟`,
+      `二维码图片发送: ${imageSent ? "已发送" : "不可用"}`,
     ];
 
     if (payload.link) {
-      parts.push(`link=${payload.link}`);
+      parts.push(`备用链接: ${payload.link}`);
     }
 
     if (!imageSent && payload.imageDataUrl) {
-      parts.push("hint=configure FEISHU_APP_ID and FEISHU_APP_SECRET to upload and send QR image");
+      parts.push("提示: 需要配置 FEISHU_APP_ID 和 FEISHU_APP_SECRET 才能直接发送二维码图片");
     }
 
     await this.send("qr_login", {

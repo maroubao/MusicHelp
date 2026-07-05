@@ -21,14 +21,22 @@ describe("FeishuNotifier", () => {
       },
     });
 
-    await notifier.sendSuccess({ durationMs: 1000, effectiveCount: 2 });
-    await notifier.sendFailure({ attempt: 2, reason: "selector_invalid" });
+    await notifier.sendSuccess({
+      durationMs: 1000,
+      effectiveCount: 2,
+      targetCount: 3,
+      targetSummary: "song / test-song",
+      completionDetection: "simulated_debug",
+    });
+    await notifier.sendFailure({ attempt: 2, reason: "selector_invalid", targetSummary: "song / test-song", progressText: "1/3" });
     await notifier.sendQrLogin({ link: "https://example.test/qr/token", expiresInMinutes: 10, attempt: 1 });
 
     expect(bodies).toHaveLength(3);
-    expect(bodies[0]).toContain("effective_count=2");
+    expect(bodies[0]).toContain("听歌任务执行成功");
+    expect(bodies[0]).toContain("调试占位判定");
     expect(bodies[1]).toContain("selector_invalid");
-    expect(bodies[2]).toContain("https://example.test/qr/token");
+    expect(bodies[1]).toContain("1/3");
+    expect(bodies[2]).toContain("备用链接");
   });
 
   it("uploads qr image and sends image message when app credentials are available", async () => {

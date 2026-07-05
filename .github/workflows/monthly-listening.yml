@@ -24,6 +24,9 @@ jobs:
     timeout-minutes: 720
     env:
       MUSICHELP_CONFIG_PATH: ${{ inputs.config_path || 'config/listening-task.yaml' }}
+      MUSICHELP_TARGET_EFFECTIVE_COUNT: ${{ vars.MUSICHELP_TARGET_EFFECTIVE_COUNT }}
+      MUSICHELP_TARGET_SONG_URL: ${{ vars.MUSICHELP_TARGET_SONG_URL }}
+      MUSICHELP_TARGET_SONG_NAME: ${{ vars.MUSICHELP_TARGET_SONG_NAME }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4

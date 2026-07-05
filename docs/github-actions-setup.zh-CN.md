@@ -92,6 +92,44 @@ musichelp_qr_sign_2026_random_abcdef1234567890
 https://example.com/musichelp/qr
 ```
 
+### 2. `MUSICHELP_TARGET_EFFECTIVE_COUNT`
+
+- 作用：控制这次任务要完成多少次计数
+- 你要填的值：正整数
+
+例子：
+
+```text
+1
+```
+
+说明：
+
+- 调试时建议先填 `1`
+- 正式跑月任务时你再改成 `365`
+
+### 3. `MUSICHELP_TARGET_SONG_URL`
+
+- 作用：直接覆盖配置文件里的默认歌曲
+- 你要填的值：网易云单曲完整 URL
+
+你现在可以填：
+
+```text
+https://music.163.com/#/song?id=3361270426
+```
+
+### 4. `MUSICHELP_TARGET_SONG_NAME`
+
+- 作用：飞书通知和日志里显示的歌曲名字
+- 你要填的值：你自己看得懂的名字
+
+例子：
+
+```text
+临时调试歌曲
+```
+
 ## 三、如果你只想先跑“飞书直接发图”方案
 
 那你最少先保证下面这些已经配好：
@@ -107,6 +145,9 @@ https://example.com/musichelp/qr
 
 - `QR_LINK_PUBLIC_BASE_URL` 可以先随便填占位值
 - `QR_LINK_SIGNING_SECRET` 也先随便填占位值
+- `MUSICHELP_TARGET_EFFECTIVE_COUNT` 先填 `1`
+- `MUSICHELP_TARGET_SONG_URL` 填你要调试的那首歌
+- `MUSICHELP_TARGET_SONG_NAME` 填你看得懂的歌名
 
 ## 四、第一次手动运行怎么做
 

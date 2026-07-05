@@ -81,6 +81,9 @@ export type RunSummary = {
   attempt: number;
   failureReason?: string;
   authMethod?: AuthMethod;
+  targetMode?: "song" | "songs" | "playlist";
+  targetNames?: string[];
+  completionDetection?: "simulated_debug" | "real";
 };
 
 export type AttemptRecord = {
