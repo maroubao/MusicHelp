@@ -48,6 +48,18 @@ export class TaskRunner {
     const sessionManager = new SessionManager(paths.stateDir);
     const counterService = new CounterService(paths.stateDir, options.config.target_effective_count);
     await counterService.initialize();
+    const plan = resolveTargets(options.config);
+
+    await logger.info(
+      [
+        `Task started: ${options.config.task_name}`,
+        `target_mode=${plan.mode}`,
+        `target_effective_count=${options.config.target_effective_count}`,
+        `queue_length=${plan.queue.length}`,
+        `loop_mode=${plan.loopMode}`,
+      ].join("; "),
+    );
+    await logger.info(`Playback queue: ${plan.queue.map((track) => `${track.name} <${track.url}>`).join(" | ")}`);
 
     let lastReason = "unknown_failure";
     let authMethod: AuthMethod | undefined;
@@ -57,8 +69,10 @@ export class TaskRunner {
       let automation: BrowserAutomation | undefined;
 
       try {
+        await logger.info(`Attempt ${attempt}/${options.config.retry.max_attempts}: validating config and preparing runner.`);
         await runState.recordState("VALIDATING_CONFIG", "Configuration loaded.", attempt);
         const storageStatePath = (await sessionManager.hasPersistedSession()) ? sessionManager.storageStatePath : undefined;
+        await logger.info(`Attempt ${attempt}: persisted_session=${storageStatePath ? "present" : "missing"}.`);
 
         await runState.recordState("STARTING_RUNNER", "Starting browser automation.", attempt);
         automation = await options.browserFactory.create({ storageStatePath });
@@ -72,9 +86,13 @@ export class TaskRunner {
             reason: valid ? undefined : "session_invalid",
           };
         });
+        await logger.info(
+          `Attempt ${attempt}: session_restore=${sessionResult.valid ? "valid" : "invalid"}${sessionResult.reason ? `; reason=${sessionResult.reason}` : ""}.`,
+        );
 
         if (!sessionResult.valid) {
           await runState.recordState("AUTHENTICATING", sessionResult.reason, attempt);
+          await logger.warn(`Attempt ${attempt}: entering authentication recovery flow.`);
 
           const qrPublicBaseUrl = options.qrPublicBaseUrl ?? process.env.QR_LINK_PUBLIC_BASE_URL;
           const qrSigningSecret = qrPublicBaseUrl
@@ -106,24 +124,36 @@ export class TaskRunner {
             throw new Error(authResult.reason ?? "authentication_failed");
           }
           authMethod = authResult.method;
+          await logger.info(`Attempt ${attempt}: authentication restored via ${authMethod}.`);
         } else {
           authMethod = "session";
+          await logger.info(`Attempt ${attempt}: continuing with persisted session.`);
         }
 
-        const plan = resolveTargets(options.config);
         await runState.recordState("PREPARING_PLAYBACK", `Resolved ${plan.queue.length} playback target(s).`, attempt);
+        await logger.info(`Attempt ${attempt}: preparing playback for ${plan.queue.length} target(s).`);
 
         const player = new PlayerController(currentAutomation);
         await runState.recordState("PLAYING", "Playback started.", attempt);
+        await logger.info(`Attempt ${attempt}: playback loop started.`);
 
         await player.playUntilStopped(
           plan,
           async () => counterService.isTargetReached(await counterService.loadCounterState()),
           async (event) => {
+            const currentState = await counterService.loadCounterState();
             if (event.type === "track_finished") {
               await runState.recordState("COUNTING", `Track finished: ${event.track.name}`, attempt);
-              await counterService.incrementCounter(event.track);
+              const nextState = await counterService.incrementCounter(event.track);
+              await logger.info(
+                `Attempt ${attempt}: track_finished=${event.track.name}; progress=${nextState.effectiveCount}/${nextState.targetCount}.`,
+              );
+            } else if (event.type === "track_started") {
+              await logger.info(
+                `Attempt ${attempt}: track_started=${event.track.name}; progress=${currentState.effectiveCount}/${currentState.targetCount}.`,
+              );
             } else if (event.type === "playback_error") {
+              await logger.error(`Attempt ${attempt}: playback_error on ${event.track.name}; reason=${event.reason}.`);
               throw new Error(event.reason);
             }
           },
@@ -131,6 +161,9 @@ export class TaskRunner {
 
         const counterState = await counterService.loadCounterState();
         await runState.recordState("COMPLETED", "Task finished successfully.", attempt);
+        await logger.info(
+          `Attempt ${attempt}: task completed; final_progress=${counterState.effectiveCount}/${counterState.targetCount}; auth_method=${authMethod ?? "unknown"}.`,
+        );
 
         summary = {
           taskName: options.config.task_name,
@@ -155,6 +188,7 @@ export class TaskRunner {
       } catch (error) {
         lastReason = error instanceof Error ? error.message : String(error);
         await runState.recordState("FAILED", lastReason, attempt);
+        await logger.error(`Attempt ${attempt}: task failed; reason=${lastReason}.`);
         await evidence.captureFailureEvidence(automation, lastReason, attempt, "FAILED");
         if (options.config.notify.send_failure) {
           await notifier.sendFailure({ attempt, reason: lastReason });
@@ -165,6 +199,7 @@ export class TaskRunner {
 
         if (attempt < options.config.retry.max_attempts) {
           await runState.recordState("RETRYING", `Retry scheduled after ${lastReason}`, attempt);
+          await logger.warn(`Attempt ${attempt}: retrying whole task after failure.`);
           await counterService.initialize();
           continue;
         }
@@ -184,6 +219,9 @@ export class TaskRunner {
       failureReason: lastReason,
       authMethod,
     };
+    await logger.error(
+      `Task failed after ${options.config.retry.max_attempts} attempt(s); final_progress=${counterState.effectiveCount}/${counterState.targetCount}; reason=${lastReason}.`,
+    );
     await evidence.writeRunSummary(summary);
     return summary;
   }
