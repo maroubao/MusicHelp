@@ -1,5 +1,5 @@
 import type { ArtifactLogger } from "../runtime/logger.js";
-import type { QrLoginNotification } from "../runtime/types.js";
+import type { ProgressNotification, QrLoginNotification } from "../runtime/types.js";
 
 type FetchLike = (input: string, init: RequestInit) => Promise<Response>;
 
@@ -24,6 +24,8 @@ export class FeishuNotifier {
     targetCount: number;
     targetSummary: string;
     completionDetection: "simulated_debug" | "real";
+    startedAt?: string;
+    finishedAt?: string;
   }): Promise<void> {
     await this.send("success", {
       msg_type: "text",
@@ -32,14 +34,22 @@ export class FeishuNotifier {
           "听歌任务执行成功",
           `目标: ${payload.targetSummary}`,
           `完成进度: ${payload.effectiveCount}/${payload.targetCount}`,
-          `耗时(ms): ${payload.durationMs}`,
+          `耗时: ${this.formatDuration(payload.durationMs)}`,
+          payload.startedAt ? `开始时间: ${this.formatLocalTime(payload.startedAt)}` : undefined,
+          payload.finishedAt ? `结束时间: ${this.formatLocalTime(payload.finishedAt)}` : undefined,
           `完成判定: ${payload.completionDetection === "simulated_debug" ? "调试占位判定" : "真实播放判定"}`,
         ].join("\n"),
       },
     });
   }
 
-  async sendFailure(payload: { attempt: number; reason: string; targetSummary?: string; progressText?: string }): Promise<void> {
+  async sendFailure(payload: {
+    attempt: number;
+    reason: string;
+    targetSummary?: string;
+    progressText?: string;
+    elapsedMs?: number;
+  }): Promise<void> {
     await this.send("failure", {
       msg_type: "text",
       content: {
@@ -48,7 +58,25 @@ export class FeishuNotifier {
           `失败轮次: 第 ${payload.attempt} 次`,
           payload.targetSummary ? `目标: ${payload.targetSummary}` : undefined,
           payload.progressText ? `进度: ${payload.progressText}` : undefined,
+          payload.elapsedMs !== undefined ? `已运行: ${this.formatDuration(payload.elapsedMs)}` : undefined,
           `原因: ${payload.reason}`,
+        ]
+          .filter(Boolean)
+          .join("\n"),
+      },
+    });
+  }
+
+  async sendProgress(payload: ProgressNotification): Promise<void> {
+    await this.send("progress", {
+      msg_type: "text",
+      content: {
+        text: [
+          "听歌任务进度提醒",
+          `目标: ${payload.targetSummary}`,
+          `当前进度: ${payload.effectiveCount}/${payload.targetCount}`,
+          `已运行: ${this.formatDuration(payload.elapsedMs)}`,
+          payload.authMethod ? `当前登录方式: ${payload.authMethod}` : undefined,
         ]
           .filter(Boolean)
           .join("\n"),
@@ -184,5 +212,32 @@ export class FeishuNotifier {
     const [, mimeType, base64Payload] = match;
     const bytes = Buffer.from(base64Payload, "base64");
     return new Blob([bytes], { type: mimeType });
+  }
+
+  private formatDuration(durationMs: number): string {
+    const totalSeconds = Math.max(0, Math.round(durationMs / 1000));
+    const hours = Math.floor(totalSeconds / 3600);
+    const minutes = Math.floor((totalSeconds % 3600) / 60);
+    const seconds = totalSeconds % 60;
+
+    const parts: string[] = [];
+    if (hours > 0) parts.push(`${hours}小时`);
+    if (minutes > 0 || hours > 0) parts.push(`${minutes}分钟`);
+    parts.push(`${seconds}秒`);
+    return parts.join("");
+  }
+
+  private formatLocalTime(isoString: string): string {
+    const date = new Date(isoString);
+    return new Intl.DateTimeFormat("zh-CN", {
+      timeZone: "Asia/Shanghai",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit",
+      hour12: false,
+    }).format(date);
   }
 }

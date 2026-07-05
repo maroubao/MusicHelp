@@ -86,6 +86,14 @@ export type RunSummary = {
   completionDetection?: "simulated_debug" | "real";
 };
 
+export type ProgressNotification = {
+  effectiveCount: number;
+  targetCount: number;
+  targetSummary: string;
+  elapsedMs: number;
+  authMethod?: AuthMethod;
+};
+
 export type AttemptRecord = {
   attempt: number;
   state: TaskState;

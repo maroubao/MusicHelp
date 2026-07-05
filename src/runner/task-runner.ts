@@ -65,6 +65,7 @@ export class TaskRunner {
     let lastReason = "unknown_failure";
     let authMethod: AuthMethod | undefined;
     let summary: RunSummary | undefined;
+    const progressMilestones = new Set<number>();
 
     for (let attempt = 1; attempt <= options.config.retry.max_attempts; attempt += 1) {
       let automation: BrowserAutomation | undefined;
@@ -149,6 +150,22 @@ export class TaskRunner {
               await logger.info(
                 `Attempt ${attempt}: track_finished=${event.track.name}; progress=${nextState.effectiveCount}/${nextState.targetCount}.`,
               );
+              const shouldNotifyProgress =
+                nextState.effectiveCount < nextState.targetCount &&
+                (nextState.effectiveCount === 1 ||
+                  nextState.effectiveCount % 10 === 0 ||
+                  nextState.effectiveCount === Math.floor(nextState.targetCount / 2));
+
+              if (shouldNotifyProgress && !progressMilestones.has(nextState.effectiveCount)) {
+                progressMilestones.add(nextState.effectiveCount);
+                await notifier.sendProgress({
+                  effectiveCount: nextState.effectiveCount,
+                  targetCount: nextState.targetCount,
+                  targetSummary,
+                  elapsedMs: Date.now() - startedAt.getTime(),
+                  authMethod,
+                });
+              }
             } else if (event.type === "track_started") {
               await logger.info(
                 `Attempt ${attempt}: track_started=${event.track.name}; progress=${currentState.effectiveCount}/${currentState.targetCount}.`,
@@ -188,6 +205,8 @@ export class TaskRunner {
             targetCount: summary.targetCount,
             targetSummary,
             completionDetection: summary.completionDetection ?? "simulated_debug",
+            startedAt: summary.startedAt,
+            finishedAt: summary.finishedAt,
           });
         }
         await automation.close();
@@ -204,6 +223,7 @@ export class TaskRunner {
             reason: lastReason,
             targetSummary,
             progressText: `${counterState.effectiveCount}/${counterState.targetCount}`,
+            elapsedMs: Date.now() - startedAt.getTime(),
           });
         }
         if (automation) {
