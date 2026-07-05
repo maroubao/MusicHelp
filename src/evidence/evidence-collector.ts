@@ -33,10 +33,21 @@ export class EvidenceCollector {
     const screenshotPath = path.join(this.paths.screenshotsDir, `${safeAttempt}.png`);
     const snapshotPath = path.join(this.paths.traceDir, `${safeAttempt}.html`);
     const recordPath = path.join(this.paths.traceDir, `${safeAttempt}.json`);
+    let screenshotError: string | undefined;
+    let snapshotError: string | undefined;
 
     if (automation) {
-      await automation.captureScreenshot(screenshotPath);
-      await automation.captureDomSnapshot(snapshotPath);
+      try {
+        await automation.captureScreenshot(screenshotPath);
+      } catch (error) {
+        screenshotError = error instanceof Error ? error.message : String(error);
+      }
+
+      try {
+        await automation.captureDomSnapshot(snapshotPath);
+      } catch (error) {
+        snapshotError = error instanceof Error ? error.message : String(error);
+      }
     }
 
     await writeJson(recordPath, {
@@ -46,6 +57,8 @@ export class EvidenceCollector {
       capturedAt: new Date().toISOString(),
       screenshotPath,
       snapshotPath,
+      screenshotError,
+      snapshotError,
     });
 
     await this.logger.error(`Failure evidence captured for attempt ${attempt}: ${reason}`);

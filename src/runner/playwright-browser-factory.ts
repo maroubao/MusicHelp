@@ -94,73 +94,67 @@ class PlaywrightBrowserAutomation implements BrowserAutomation {
 
   async waitForTrackFinished(): Promise<PlaybackResult> {
     try {
-      await this.page.waitForFunction(() => {
-        const audio = document.querySelector<HTMLAudioElement>("audio");
-        if (audio && audio.duration > 0) {
-          return !audio.paused || audio.currentTime > 0;
+      await this.page.waitForFunction(
+        `
+        () => {
+          const audio = document.querySelector("audio");
+          if (audio && audio.duration > 0) {
+            return !audio.paused || audio.currentTime > 0;
+          }
+          const nodes = Array.from(document.querySelectorAll(".m-playbar .time em, .m-playbar em"));
+          const texts = nodes.map(node => (node.innerText || "").trim()).filter(Boolean);
+          return texts.some(text => /^\\d{1,2}:\\d{2}$/.test(text));
         }
+        `,
+        undefined,
+        { timeout: 30_000 },
+      );
 
-        const timeTexts = Array.from(document.querySelectorAll<HTMLElement>(".m-playbar .time em, .m-playbar em"))
-          .map((node) => node.innerText.trim())
-          .filter(Boolean);
-        return timeTexts.some((text) => /^\d{1,2}:\d{2}$/.test(text));
-      }, undefined, { timeout: 30_000 });
+      await this.page.waitForFunction(
+        `
+        () => {
+          const parseTimeText = (input) => {
+            const match = /^(\\d{1,2}):(\\d{2})$/.exec((input || "").trim());
+            if (!match) return null;
+            return Number(match[1]) * 60 + Number(match[2]);
+          };
 
-      await this.page.waitForFunction(() => {
-        const parseTime = (input: string): number | null => {
-          const match = /^(\d{1,2}):(\d{2})$/.exec(input.trim());
-          if (!match) return null;
-          return Number(match[1]) * 60 + Number(match[2]);
-        };
-
-        const audio = document.querySelector<HTMLAudioElement>("audio");
-        if (audio && audio.duration > 0) {
-          const state = (window as typeof window & {
-            __musicHelpStartedAt?: number;
-            __musicHelpLastTime?: number;
-          });
-
-          if (!state.__musicHelpStartedAt && (!audio.paused || audio.currentTime > 0)) {
-            state.__musicHelpStartedAt = Date.now();
-            state.__musicHelpLastTime = audio.currentTime;
+          const state = window;
+          const audio = document.querySelector("audio");
+          if (audio && audio.duration > 0) {
+            if (!state.__musicHelpStartedAt && (!audio.paused || audio.currentTime > 0)) {
+              state.__musicHelpStartedAt = Date.now();
+              state.__musicHelpLastTime = audio.currentTime;
+            }
+            if (state.__musicHelpStartedAt && audio.currentTime > (state.__musicHelpLastTime || 0)) {
+              state.__musicHelpLastTime = audio.currentTime;
+            }
+            return audio.ended || (audio.duration - audio.currentTime <= 1 && audio.currentTime > 1);
           }
 
-          if (state.__musicHelpStartedAt && audio.currentTime > (state.__musicHelpLastTime ?? 0)) {
-            state.__musicHelpLastTime = audio.currentTime;
+          const nodes = Array.from(document.querySelectorAll(".m-playbar .time em, .m-playbar em"));
+          const texts = nodes
+            .map(node => (node.innerText || "").trim())
+            .filter(text => /^\\d{1,2}:\\d{2}$/.test(text));
+
+          if (texts.length < 2) return false;
+
+          const current = parseTimeText(texts[0]);
+          const total = parseTimeText(texts[1]);
+          if (current === null || total === null || total <= 0) return false;
+
+          if (current > 0) {
+            state.__musicHelpStartedProgress = true;
           }
-
-          return audio.ended || (audio.duration - audio.currentTime <= 1 && audio.currentTime > 1);
+          if ((state.__musicHelpLastProgress || -1) < current) {
+            state.__musicHelpLastProgress = current;
+          }
+          return Boolean(state.__musicHelpStartedProgress) && total - current <= 1;
         }
-
-        const timeTexts = Array.from(document.querySelectorAll<HTMLElement>(".m-playbar .time em, .m-playbar em"))
-          .map((node) => node.innerText.trim())
-          .filter((text) => /^\d{1,2}:\d{2}$/.test(text));
-
-        if (timeTexts.length < 2) {
-          return false;
-        }
-
-        const current = parseTime(timeTexts[0] ?? "");
-        const total = parseTime(timeTexts[1] ?? "");
-        if (current === null || total === null || total <= 0) {
-          return false;
-        }
-
-        const state = (window as typeof window & {
-          __musicHelpStartedProgress?: boolean;
-          __musicHelpLastProgress?: number;
-        });
-
-        if (current > 0) {
-          state.__musicHelpStartedProgress = true;
-        }
-
-        if ((state.__musicHelpLastProgress ?? -1) < current) {
-          state.__musicHelpLastProgress = current;
-        }
-
-        return Boolean(state.__musicHelpStartedProgress) && total - current <= 1;
-      }, undefined, { timeout: 20 * 60_000, polling: 1000 });
+        `,
+        undefined,
+        { timeout: 20 * 60_000, polling: 1000 },
+      );
 
       return { status: "finished" };
     } catch (error) {
