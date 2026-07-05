@@ -78,6 +78,10 @@ describe("TaskRunner", () => {
     process.env.QR_LINK_SIGNING_SECRET = "signing-secret";
     process.env.NETEASE_USERNAME = "user";
     process.env.NETEASE_PASSWORD = "pass";
+    delete process.env.FEISHU_BOT_WEBHOOK;
+    delete process.env.FEISHU_APP_ID;
+    delete process.env.FEISHU_APP_SECRET;
+    expect(process.env.FEISHU_BOT_WEBHOOK).toBeUndefined();
     await mkdir(path.join(artifactsDir, "state"), { recursive: true });
     await writeFile(path.join(artifactsDir, "state", "session-state.json"), "{\"cookies\":[]}", "utf8");
 
@@ -129,7 +133,7 @@ describe("TaskRunner", () => {
           password_secret_ref: "NETEASE_PASSWORD",
         },
         notify: {
-          feishu_webhook_secret_ref: "FEISHU_BOT_WEBHOOK",
+          feishu_webhook_secret_ref: "TEST_FEISHU_BOT_WEBHOOK",
           send_success: true,
           send_failure: true,
           include_duration: true,
