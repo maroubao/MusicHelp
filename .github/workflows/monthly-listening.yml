@@ -4,6 +4,15 @@ on:
   schedule:
     - cron: "0 2 1 * *"
   workflow_dispatch:
+    inputs:
+      config_path:
+        description: Config file path
+        required: false
+        default: config/listening-task.yaml
+      debug_label:
+        description: Optional label to include in the run summary
+        required: false
+        default: manual-run
 
 concurrency:
   group: monthly-listening
@@ -14,7 +23,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 720
     env:
-      MUSICHELP_CONFIG_PATH: config/listening-task.yaml
+      MUSICHELP_CONFIG_PATH: ${{ inputs.config_path || 'config/listening-task.yaml' }}
       QR_LINK_PUBLIC_BASE_URL: ${{ vars.QR_LINK_PUBLIC_BASE_URL }}
       QR_LINK_SIGNING_SECRET: ${{ secrets.QR_LINK_SIGNING_SECRET }}
       FEISHU_BOT_WEBHOOK: ${{ secrets.FEISHU_BOT_WEBHOOK }}
@@ -54,6 +63,19 @@ jobs:
 
       - name: Run monthly task
         run: npm run task:monthly
+
+      - name: Append GitHub summary
+        if: always()
+        shell: bash
+        run: |
+          echo "# monthly-listening" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "- config_path: ${MUSICHELP_CONFIG_PATH}" >> "$GITHUB_STEP_SUMMARY"
+          echo "- debug_label: ${{ inputs.debug_label || 'schedule-run' }}" >> "$GITHUB_STEP_SUMMARY"
+          if [ -f artifacts/reports/run-summary.md ]; then
+            echo "" >> "$GITHUB_STEP_SUMMARY"
+            cat artifacts/reports/run-summary.md >> "$GITHUB_STEP_SUMMARY"
+          fi
 
       - name: Save persisted session cache
         if: always()
